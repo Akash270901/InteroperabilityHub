@@ -187,7 +187,6 @@
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
     </Compile>
-    <Compile Include="JsonToXmlModelBinder.cs" />
     <Compile Include="Middlewares\CustomMiddleware.cs" />
     <Compile Include="Models\CircuitDetails.cs" />
     <Compile Include="Models\Quotation.cs" />

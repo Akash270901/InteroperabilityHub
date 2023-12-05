@@ -15,7 +15,6 @@ namespace JSONASMXConnector
             FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
-            ModelBinders.Binders.Add(typeof(XmlDocument), new JsonToXmlModelBinder());
         }
     }
 }

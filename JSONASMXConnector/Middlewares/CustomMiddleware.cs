@@ -13,6 +13,7 @@ namespace JSONASMXConnector.Middlewares
 {
     public class CustomHttpModule : IHttpModule
     {
+        private static bool applicationStarted = false;
         public void Init(HttpApplication context)
         {
             context.BeginRequest += OnBeginRequest;
@@ -23,68 +24,87 @@ namespace JSONASMXConnector.Middlewares
         }
         private void OnBeginRequest(object sender, EventArgs e)
         {
-            var application = (HttpApplication)sender;
-            var request = application.Request;
-            var queryParameters = request.QueryString;
-            List<object> parameterKeys = new List<object>();
-            string paramsXml = string.Empty;
-            string xmlBody = string.Empty;
-            string endpoint = HttpContext.Current.Request.Path;
-            string funcName = ConfigurationManager.AppSettings[endpoint];
-            if (queryParameters.Count > 0)
+            if (!applicationStarted)
             {
-                foreach (var property in queryParameters.AllKeys)
-                {
-                    var paramObj = new
-                    {
-                        key = property,
-                        value = HttpContext.Current.Request.QueryString[property]
-                    };
-                    parameterKeys.Add(paramObj);
-                }
-                paramsXml = ConvertParamsToXml(parameterKeys);
+                applicationStarted = true;
+                return;
             }
-            using (var reqbody = new StreamReader(request.InputStream))
+            var application = (HttpApplication)sender;
+            try
             {
-                var Body = reqbody.ReadToEnd();
-                if (Body != string.Empty)
+                var request = application.Request;
+                var queryParameters = request.QueryString;
+                List<object> parameterKeys = new List<object>();
+                string paramsXml = string.Empty;
+                string xmlBody = string.Empty;
+                string endpoint = HttpContext.Current.Request.Path;
+                string funcName = ConfigurationManager.AppSettings[endpoint];
+                if (queryParameters.Count > 0)
                 {
-                    JObject jObject = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(Body);
-                    ModifyNullValues(jObject);
-                    var objXml = ConvertJObjectToXml(jObject);
-                    xmlBody = $"<circuit>\r\n   " +
-                        $"{objXml}\r\n   " +
-                        $"</circuit>";
-                }
-                string soapXml = ConvertToSoapXml(paramsXml, xmlBody, funcName);
-                XmlDocument xmlDoc = new XmlDocument();
-                xmlDoc.LoadXml(soapXml);
-                string serviceurl = ConfigurationManager.AppSettings["Serviceurl"];
-                HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(serviceurl);
-                newrequest.Method = request.HttpMethod;
-                newrequest.ContentType = "application/soap+xml; charset=utf-8";
-                using (StreamWriter writer = new StreamWriter(newrequest.GetRequestStream()))
-                {
-                    writer.Write(xmlDoc.InnerXml);
-                }
-                using (HttpWebResponse response = (HttpWebResponse)newrequest.GetResponse())
-                {
-                    using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                    foreach (var property in queryParameters.AllKeys)
                     {
-                        string xmlResponse = reader.ReadToEnd();
-                        XDocument responseXmlDoc = XDocument.Parse(xmlResponse);
-                        string jsonString = Newtonsoft.Json.JsonConvert.SerializeXNode(responseXmlDoc);
-                        var jsonResponse = JObject.Parse(jsonString);
-                        var resultEnvelope = jsonResponse["soap:Envelope"];
-                        var bodyResponse = resultEnvelope["soap:Body"];
+                        var paramObj = new
+                        {
+                            key = property,
+                            value = HttpContext.Current.Request.QueryString[property]
+                        };
+                        parameterKeys.Add(paramObj);
+                    }
+                    paramsXml = ConvertParamsToXml(parameterKeys);
+                }
+                using (var reqbody = new StreamReader(request.InputStream))
+                {
+                    var Body = reqbody.ReadToEnd();
+                    if (Body != string.Empty)
+                    {
+                        if (request.ContentType == "application/json")
+                        {
+                            JObject jObject = Newtonsoft.Json.JsonConvert.DeserializeObject<JObject>(Body);
+                            ModifyNullValues(jObject);
+                            var objXml = ConvertJObjectToXml(jObject);
+                            xmlBody = $"<circuit>\r\n   " +
+                                $"{objXml}\r\n   " +
+                                $"</circuit>";
+                        }
+                    }
+                    string soapXml = ConvertToSoapXml(paramsXml, xmlBody, funcName);
+                    XmlDocument xmlDoc = new XmlDocument();
+                    xmlDoc.LoadXml(soapXml);
+                    string serviceurl = ConfigurationManager.AppSettings["Serviceurl"];
+                    HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(serviceurl);
+                    newrequest.Method = request.HttpMethod;
+                    newrequest.ContentType = "application/soap+xml; charset=utf-8";
+                    using (StreamWriter writer = new StreamWriter(newrequest.GetRequestStream()))
+                    {
+                        writer.Write(xmlDoc.InnerXml);
+                    }
+                    using (HttpWebResponse response = (HttpWebResponse)newrequest.GetResponse())
+                    {
+                        using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                        {
+                            string xmlResponse = reader.ReadToEnd();
+                            XDocument responseXmlDoc = XDocument.Parse(xmlResponse);
+                            string jsonString = Newtonsoft.Json.JsonConvert.SerializeXNode(responseXmlDoc);
+                            var jsonResponse = JObject.Parse(jsonString);
+                            var resultEnvelope = jsonResponse["soap:Envelope"];
+                            var bodyResponse = resultEnvelope["soap:Body"];
 
-                        application.Response.Clear();
-                        application.Response.ContentType = "application/json";
-                        application.Response.Write(bodyResponse);
-                        application.Response.End();
+                            ClearAndWriteJsonResponse(application, bodyResponse.ToString());
+                        }
                     }
                 }
             }
+            catch(Exception ex)
+            {
+                ClearAndWriteJsonResponse(application, ex.Message.ToString());
+            }
+        }
+        private void ClearAndWriteJsonResponse(HttpApplication application, dynamic bodyResponse)
+        {
+            application.Response.Clear();
+            application.Response.ContentType = "application/json";
+            application.Response.Write(bodyResponse);
+            application.CompleteRequest();
         }
         private string ConvertToSoapXml(string paramsXml, string body, string funcName)
         {
