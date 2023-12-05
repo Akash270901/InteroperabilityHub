@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34316.72
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JSONASMXConnector", "JSONASMXConnector\JSONASMXConnector.csproj", "{06E8E258-DAEC-4EC0-84D4-53B11DF12938}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{06E8E258-DAEC-4EC0-84D4-53B11DF12938}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{06E8E258-DAEC-4EC0-84D4-53B11DF12938}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{06E8E258-DAEC-4EC0-84D4-53B11DF12938}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{06E8E258-DAEC-4EC0-84D4-53B11DF12938}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9D90F4E6-8A4C-4A56-9CAD-7DF28F2BD6E0}
+	EndGlobalSection
+EndGlobal
