@@ -1,5 +1,6 @@
 ﻿using JSONASMXConnector.Extensions;
 using Newtonsoft.Json.Linq;
+using NLog;
 using System;
 using System.Configuration;
 using System.IO;
@@ -13,6 +14,8 @@ namespace JSONASMXConnector.CustomModules
     public class CustomHttpModule : IHttpModule
     {
         private static bool applicationStarted = false;
+        private static Logger logger = LogManager.GetCurrentClassLogger();
+
         public void Init(HttpApplication context)
         {
             context.BeginRequest += OnBeginRequest;
@@ -36,6 +39,7 @@ namespace JSONASMXConnector.CustomModules
                 var request = application.Request;
                 string endpoint = HttpContext.Current.Request.Path;
                 endpoint = char.ToUpper(endpoint[1]) + endpoint.Substring(2);
+                logger.Info(endpoint + Environment.NewLine + DateTime.Now);
                 using (var reqbody = new StreamReader(request.InputStream))
                 {
                     var Body = reqbody.ReadToEnd();
