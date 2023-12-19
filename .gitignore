@@ -362,3 +362,4 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /JSONASMXConnector/App_Data/Transmissions/Neos-QuoteAPI
+/JSONASMXConnector/App_Data/Transmissions/NEOS-CustomerAPI

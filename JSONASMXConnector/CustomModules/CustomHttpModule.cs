@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Configuration;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Web;
 using System.Xml;
@@ -38,13 +39,16 @@ namespace JSONASMXConnector.CustomModules
                 if (lastSlashIndex > 0)
                 {
                     api_ver = endpoint.Substring(0, lastSlashIndex);
+                    endpoint = endpoint.Split('/').Last();
                 }
                 else
                 {
                     api_ver = "/v5_0/API";
+                    endpoint = char.ToUpper(endpoint[1]) + endpoint.Substring(2);
                 }
+
                 string token1 = ConfigurationManager.AppSettings["token1"];
-                string path = System.Web.Hosting.HostingEnvironment.MapPath("~/App_Data/Transmissions/Neos-QuoteAPI/");
+                string path = System.Web.Hosting.HostingEnvironment.MapPath($"~/App_Data/Transmissions/NEOS-CustomerAPI/{api_ver}");
                 string serviceurl = ConfigurationManager.AppSettings["Serviceurl"];
                 serviceurl += api_ver + ".asmx";
                 HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(serviceurl);
@@ -53,7 +57,6 @@ namespace JSONASMXConnector.CustomModules
                 {
                     if (token1 == authorizationToken)
                         IsAuthorized = true;
-                    endpoint = char.ToUpper(endpoint[1]) + endpoint.Substring(2);
                     using (var reqbody = new StreamReader(request.InputStream))
                     {
                         var Body = reqbody.ReadToEnd();
@@ -71,7 +74,7 @@ namespace JSONASMXConnector.CustomModules
                         ModifyNullValues(jObject);
                         var xmlBody = ConvertJObjectToXml(jObject);
 
-                        string soapXml = ConvertToSoapXml(xmlBody, endpoint);
+                        string soapXml = ConvertToSoapXml(xmlBody, endpoint, api_ver);
                         xmlDoc.LoadXml(soapXml);
 
                         newrequest.Method = request.HttpMethod;
@@ -130,8 +133,7 @@ namespace JSONASMXConnector.CustomModules
                                 }
                                 string formattedDateTime = DateTime.UtcNow.ToString("yyyy-MM-dd-hh-mm-ss");
 
-                                string xmlLogFileName = $"{formattedDateTime}-{endpoint}.xml";
-                                string xmlLogPath = Path.Combine(path, xmlLogFileName);
+                                string xmlLogPath = Path.Combine(path, $"{formattedDateTime}-{endpoint}.xml");
 
                                 using (XmlWriter writer = XmlWriter.Create(xmlLogPath))
                                 {
@@ -153,8 +155,8 @@ namespace JSONASMXConnector.CustomModules
                                 }
 
                                 string jsondata = Newtonsoft.Json.JsonConvert.SerializeObject(jsonRequestDetails, Newtonsoft.Json.Formatting.Indented);
-
-                                File.WriteAllText(path + $"{formattedDateTime}-{endpoint}.json", jsondata);
+                                string jsonLogPath = Path.Combine(path, $"{formattedDateTime}-{endpoint}.json");
+                                File.WriteAllText(jsonLogPath, jsondata);
                                 ClearAndWriteJsonResponse(application, finalResult);
                             }
                         }
@@ -230,10 +232,9 @@ namespace JSONASMXConnector.CustomModules
             application.CompleteRequest();
         }
 
-        private string ConvertToSoapXml(string xmlBody, string endpoint)
+        private string ConvertToSoapXml(string xmlBody, string endpoint, string api_ver)
         {
-            string xmlns = ConfigurationManager.AppSettings["xmlns"];
-            string serviceXmlns = ConfigurationManager.AppSettings["ServiceXmlns"];
+            string serviceXmlns = ConfigurationManager.AppSettings[$"{api_ver}"];
 
             var soapXml = $@"<soap12:Envelope xmlns:xsi=""http://www.w3.org/2001/XMLSchema-instance"" xmlns:xsd=""http://www.w3.org/2001/XMLSchema"" xmlns:soap12=""http://www.w3.org/2003/05/soap-envelope"">
   <soap12:Body>
