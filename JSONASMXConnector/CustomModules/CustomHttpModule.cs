@@ -1,6 +1,5 @@
 ﻿using JSONASMXConnector.Extensions;
 using Newtonsoft.Json.Linq;
-using NLog;
 using System;
 using System.Configuration;
 using System.IO;
@@ -30,13 +29,28 @@ namespace JSONASMXConnector.CustomModules
             {
                 bool IsAuthorized = false;
                 var application = (HttpApplication)sender;
+                var request = application.Request;
+                string authorizationToken = request.Headers["Authorization"];
+                string ipAddress = request.UserHostAddress;
+                string endpoint = HttpContext.Current.Request.Path;
+                int lastSlashIndex = endpoint.LastIndexOf('/');
+                string api_ver = string.Empty;
+                if (lastSlashIndex > 0)
+                {
+                    api_ver = endpoint.Substring(0, lastSlashIndex);
+                }
+                else
+                {
+                    api_ver = "/v5_0/API";
+                }
+                string token1 = ConfigurationManager.AppSettings["token1"];
+                string path = System.Web.Hosting.HostingEnvironment.MapPath("~/App_Data/Transmissions/Neos-QuoteAPI/");
+                string serviceurl = ConfigurationManager.AppSettings["Serviceurl"];
+                serviceurl += api_ver + ".asmx";
+                HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(serviceurl);
+                XmlDocument xmlDoc = new XmlDocument();
                 try
                 {
-                    var request = application.Request;
-                    string authorizationToken = request.Headers["Authorization"];
-                    string ipAddress = request.UserHostAddress;
-                    string endpoint = HttpContext.Current.Request.Path;
-                    string token1 = ConfigurationManager.AppSettings["token1"];
                     if (token1 == authorizationToken)
                         IsAuthorized = true;
                     endpoint = char.ToUpper(endpoint[1]) + endpoint.Substring(2);
@@ -58,10 +72,8 @@ namespace JSONASMXConnector.CustomModules
                         var xmlBody = ConvertJObjectToXml(jObject);
 
                         string soapXml = ConvertToSoapXml(xmlBody, endpoint);
-                        XmlDocument xmlDoc = new XmlDocument();
                         xmlDoc.LoadXml(soapXml);
-                        string serviceurl = ConfigurationManager.AppSettings["Serviceurl"];
-                        HttpWebRequest newrequest = (HttpWebRequest)WebRequest.Create(serviceurl);
+
                         newrequest.Method = request.HttpMethod;
                         newrequest.ContentType = "application/soap+xml";
                         using (StreamWriter writer = new StreamWriter(newrequest.GetRequestStream()))
@@ -112,7 +124,6 @@ namespace JSONASMXConnector.CustomModules
                                     },
                                     Authorized = IsAuthorized
                                 };
-                                string path = System.Web.Hosting.HostingEnvironment.MapPath("~/App_Data/Transmissions/Neos-QuoteAPI/");
                                 if (!Directory.Exists(path))
                                 {
                                     Directory.CreateDirectory(path);
@@ -125,15 +136,19 @@ namespace JSONASMXConnector.CustomModules
                                 using (XmlWriter writer = XmlWriter.Create(xmlLogPath))
                                 {
                                     writer.WriteStartElement($"{endpoint}");
-                                    writer.WriteElementString("Request", xmlDoc.InnerXml.ToString());
-                                    writer.WriteElementString("RequestEndpoint", endpoint);
+                                    writer.WriteElementString("FullRequest", xmlDoc.InnerXml.ToString());
+                                    writer.WriteStartElement("Request");
                                     writer.WriteElementString("HttpMethod", newrequest.Method);
                                     writer.WriteElementString("ContentType", newrequest.ContentType);
-                                    writer.WriteElementString("Time", DateTime.UtcNow.ToString());
+                                    writer.WriteElementString("Endpoint", endpoint);
                                     writer.WriteElementString("AuthorizationToken", authorizationToken);
+                                    writer.WriteEndElement();
+                                    writer.WriteStartElement("Client");
                                     writer.WriteElementString("IPAddress", ipAddress);
-                                    writer.WriteElementString("Authorized", IsAuthorized.ToString());
+                                    writer.WriteEndElement();
+                                    writer.WriteElementString("Time", DateTime.UtcNow.ToString());
                                     writer.WriteElementString("Response", xmlResponse);
+                                    writer.WriteElementString("Authorized", IsAuthorized.ToString());
                                     writer.WriteEndElement();
                                 }
 
@@ -147,6 +162,61 @@ namespace JSONASMXConnector.CustomModules
                 }
                 catch (Exception ex)
                 {
+                    var jsonRequestDetails = new
+                    {
+                        Request = new
+                        {
+                            request.HttpMethod,
+                            request.ContentType,
+                            Endpoint = endpoint,
+                            AuthorizationToken = authorizationToken
+                        },
+                        Client = new
+                        {
+                            IPAddress = ipAddress
+                        },
+                        Time = DateTime.UtcNow,
+                        Error = new
+                        {
+                            ex.Message,
+                            ex.StackTrace
+                        },
+                        Authorized = IsAuthorized
+                    };
+                    if (!Directory.Exists(path))
+                    {
+                        Directory.CreateDirectory(path);
+                    }
+                    string formattedDateTime = DateTime.UtcNow.ToString("yyyy-MM-dd-hh-mm-ss");
+
+                    string xmlLogFileName = $"{formattedDateTime}-{endpoint}.xml";
+                    string xmlLogPath = Path.Combine(path, xmlLogFileName);
+
+                    using (XmlWriter writer = XmlWriter.Create(xmlLogPath))
+                    {
+                        writer.WriteStartElement($"{endpoint}");
+                        writer.WriteStartElement("Request");
+                        writer.WriteElementString("FullRequest", xmlDoc.InnerXml.ToString());
+                        writer.WriteElementString("HttpMethod", newrequest.Method);
+                        writer.WriteElementString("ContentType", newrequest.ContentType);
+                        writer.WriteElementString("Endpoint", endpoint);
+                        writer.WriteElementString("AuthorizationToken", authorizationToken);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("Client");
+                        writer.WriteElementString("IPAddress", ipAddress);
+                        writer.WriteEndElement();
+                        writer.WriteElementString("Time", DateTime.UtcNow.ToString());
+                        writer.WriteStartElement("Error");
+                        writer.WriteElementString("Message", ex.Message);
+                        writer.WriteElementString("StackTrace", ex.StackTrace);
+                        writer.WriteEndElement();
+                        writer.WriteElementString("Authorized", IsAuthorized.ToString());
+                        writer.WriteEndElement();
+                    }
+
+                    string jsondata = Newtonsoft.Json.JsonConvert.SerializeObject(jsonRequestDetails, Newtonsoft.Json.Formatting.Indented);
+
+                    File.WriteAllText(path + $"{formattedDateTime}-{endpoint}.json", jsondata);
                     ClearAndWriteJsonResponse(application, ex.Message.ToString());
                 }
             }
@@ -234,50 +304,6 @@ namespace JSONASMXConnector.CustomModules
                 {
                     property.Value = new JValue("null");
                 }
-            }
-        }
-
-        private void LogToJson(JObject jsonRequestDetails, string authorizationToken, string ipAddress, string endpoint)
-        {
-            string path = System.Web.Hosting.HostingEnvironment.MapPath("~/App_Data/Transmissions/Neos-QuoteAPI/");
-            if (!Directory.Exists(path))
-            {
-                Directory.CreateDirectory(path);
-            }
-
-            string formattedDateTime = DateTime.UtcNow.ToString("yyyy-MM-dd-hh-mm-ss");
-            string jsonLogFileName = $"{formattedDateTime}-{endpoint}.json";
-            string jsonLogPath = Path.Combine(path, jsonLogFileName);
-
-            string jsondata = Newtonsoft.Json.JsonConvert.SerializeObject(jsonRequestDetails, Newtonsoft.Json.Formatting.Indented);
-            File.WriteAllText(jsonLogPath, jsondata);
-        }
-
-        private void LogToXml(XmlDocument xmlDoc, string authorizationToken, string ipAddress, string endpoint, string xmlResponse)
-        {
-            string path = System.Web.Hosting.HostingEnvironment.MapPath("~/App_Data/Transmissions/Neos-QuoteAPI/");
-            if (!Directory.Exists(path))
-            {
-                Directory.CreateDirectory(path);
-            }
-
-            string formattedDateTime = DateTime.UtcNow.ToString("yyyy-MM-dd-hh-mm-ss");
-            string xmlLogFileName = $"{formattedDateTime}-{endpoint}.xml";
-            string xmlLogPath = Path.Combine(path, xmlLogFileName);
-
-            using (XmlWriter writer = XmlWriter.Create(xmlLogPath))
-            {
-                writer.WriteStartElement($"{endpoint}");
-                writer.WriteElementString("Request", xmlDoc.InnerXml.ToString());
-                writer.WriteElementString("RequestEndpoint", endpoint);
-                writer.WriteElementString("HttpMethod", "POST");
-                writer.WriteElementString("ContentType", "application/soap+xml");
-                writer.WriteElementString("Time", DateTime.UtcNow.ToString());
-                writer.WriteElementString("AuthorizationToken", authorizationToken);
-                writer.WriteElementString("IPAddress", ipAddress);
-                writer.WriteElementString("Authorized", "true");
-                writer.WriteElementString("Response", xmlResponse);
-                writer.WriteEndElement();
             }
         }
 
