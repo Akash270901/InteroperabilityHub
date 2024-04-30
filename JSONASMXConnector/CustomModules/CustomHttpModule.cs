@@ -215,13 +215,11 @@ namespace JSONASMXConnector.CustomModules
                                 using (var errorReader = new StreamReader(errorResponse.GetResponseStream()))
                                 {
                                     var errorText = errorReader.ReadToEnd();
-                                    string pattern = @"System\.Exception:\s*\d+:\s*(.*?)\.\s*([\d\.]+)";
+                                    string pattern = @"System\.Exception:\s*\d+:\s*([^\.]+)\.";
                                     Match match = Regex.Match(errorText, pattern);
                                     if (match.Success)
                                     {
-                                        string errorMessage = match.Groups[1].Value;
-                                        string errIP = match.Groups[2].Value;
-                                        errorResponseText = $"{errorMessage}. {errIP}";
+                                        errorResponseText = match.Groups[1].Value;
                                     }
                                 }
                             }
