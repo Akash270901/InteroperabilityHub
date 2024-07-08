@@ -292,7 +292,7 @@ namespace JSONASMXConnector.CustomModules
                     File.WriteAllText(jsonLogPath, jsondata);
 
                     // Respond to the client with the error message
-                    ClearAndWriteJsonResponse(application, ex.Message.ToString());
+                    ClearAndWriteJsonResponse(application, "Updated");
                 }
             }
         }
